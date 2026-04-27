@@ -1,0 +1,25 @@
+# ROS2 colcon build artifacts
+build/
+install/
+log/
+
+# Python
+__pycache__/
+*.py[cod]
+*.egg-info/
+dist/
+.eggs/
+*.egg
+
+# Editor / OS
+.vscode/
+.idea/
+*.swp
+*.swo
+*~
+.DS_Store
+Thumbs.db
+
+# Audio files (add your own files — keep the directory tracked via .gitkeep)
+src/ar_audio/audio/*
+!src/ar_audio/audio/.gitkeep
