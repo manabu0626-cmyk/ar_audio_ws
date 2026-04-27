@@ -14,8 +14,9 @@ setup(
         (f'share/{package_name}/config', glob('config/*.yaml')),
         (f'share/{package_name}/launch', glob('launch/*.launch.py')),
         (f'share/{package_name}/audio', glob('audio/*')),
+        (f'share/{package_name}/admin/static', glob('admin/static/*')),
     ],
-    install_requires=['setuptools'],
+    install_requires=['setuptools', 'fastapi', 'uvicorn', 'httpx', 'pyyaml', 'python-multipart'],
     zip_safe=True,
     maintainer='user',
     maintainer_email='user@example.com',
@@ -25,6 +26,7 @@ setup(
     entry_points={
         'console_scripts': [
             f'ar_audio_node = {package_name}.ar_audio_node:main',
+            f'ar_audio_admin = {package_name}.admin.app:main',
         ],
     },
 )

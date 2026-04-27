@@ -1,27 +1,22 @@
-# AR Audio Points Configuration
-#
-# Fields per point:
-#   name       : display name (used in log output)
-#   latitude   : WGS-84 decimal degrees
-#   longitude  : WGS-84 decimal degrees
-#   audio_file : path relative to audio_base_path (or absolute path)
-#   radius     : trigger radius in metres (default: 10.0)
-
 ar_points:
-  - name: "Tokyo Station East Exit"
-    latitude: 35.680278
-    longitude: 139.768056
-    audio_file: "tokyo_station.wav"
-    radius: 20.0
-
-  - name: "Marunouchi Building"
-    latitude: 35.681111
-    longitude: 139.765556
-    audio_file: "marunouchi.mp3"
-    radius: 15.0
-
-  - name: "Imperial Palace East Garden"
-    latitude: 35.685278
-    longitude: 139.757222
-    audio_file: "imperial_garden.mp3"
-    radius: 30.0
+- name: Tokyo Station East Exit
+  latitude: 35.680278
+  longitude: 139.768056
+  audio_file: tokyo_station.wav
+  radius: 20.0
+  tts_texts:
+    ja: 本日は、ご乗車いただき誠にありがとうございます。左に見えますのが、八重洲中央口になります。お降りの際は左右を確認の上、お降りください。本日はご乗車いただき、誠にありがとうございます。
+  audio_files: {}
+  id: 086d4015
+- name: Marunouchi Building
+  latitude: 35.681111
+  longitude: 139.765556
+  audio_file: marunouchi.mp3
+  radius: 15.0
+  id: d9ee7a87
+- name: Imperial Palace East Garden
+  latitude: 35.685278
+  longitude: 139.757222
+  audio_file: imperial_garden.mp3
+  radius: 30.0
+  id: 4d713828

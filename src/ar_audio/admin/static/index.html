@@ -1,0 +1,577 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>AR Audio Admin</title>
+<link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css"/>
+<style>
+*{box-sizing:border-box;margin:0;padding:0}
+:root{
+  --pri:#3b82f6;--pri-h:#2563eb;
+  --del:#ef4444;--del-h:#dc2626;
+  --ok:#22c55e;--ok-h:#16a34a;
+  --bg:#f1f5f9;--sb:#ffffff;
+  --bd:#e2e8f0;--bd2:#cbd5e1;
+  --tx:#1e293b;--mu:#64748b;
+  --sw:380px;--hh:52px;
+}
+body{font:14px/1.5 -apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif;color:var(--tx);background:var(--bg);height:100vh;overflow:hidden}
+
+/* ── Header ── */
+#hdr{height:var(--hh);background:#0f172a;color:#f8fafc;display:flex;align-items:center;padding:0 16px;gap:10px;flex-shrink:0}
+#hdr h1{font-size:15px;font-weight:600;flex:1;letter-spacing:.02em}
+#hdr label{font-size:12px;color:#94a3b8}
+#sel-lang{background:#1e293b;color:#f8fafc;border:1px solid #334155;border-radius:5px;padding:4px 8px;font-size:13px;cursor:pointer}
+
+/* ── Layout ── */
+#body{display:flex;height:calc(100vh - var(--hh))}
+#map{flex:1;height:100%;z-index:1}
+
+/* ── Sidebar ── */
+#sidebar{width:var(--sw);background:var(--sb);border-left:1px solid var(--bd);display:flex;flex-direction:column;overflow:hidden;z-index:2;box-shadow:-2px 0 8px rgba(0,0,0,.06)}
+#view-list,#view-form{display:flex;flex-direction:column;height:100%;overflow:hidden}
+#view-form{display:none}
+
+/* list toolbar */
+.sb-toolbar{padding:10px 12px;border-bottom:1px solid var(--bd);display:flex;align-items:center;gap:8px;flex-shrink:0}
+.sb-toolbar .ttl{font-size:13px;font-weight:600;flex:1;color:var(--tx)}
+
+/* add-mode banner */
+#add-hint{padding:8px 12px;background:#fefce8;border-bottom:1px solid #fde047;display:none;align-items:center;gap:8px;flex-shrink:0}
+#add-hint span{font-size:12px;color:#713f12;flex:1}
+
+/* point list */
+#point-list{flex:1;overflow-y:auto}
+.point-item{padding:10px 14px;border-bottom:1px solid var(--bd);cursor:pointer;transition:background .1s;display:flex;align-items:center;gap:10px}
+.point-item:hover{background:#f8fafc}
+.point-item.active{background:#eff6ff;border-left:3px solid var(--pri)}
+.pi-dot{width:8px;height:8px;border-radius:50%;background:var(--del);flex-shrink:0}
+.point-item.active .pi-dot{background:var(--pri)}
+.pi-text{min-width:0}
+.pi-name{font-weight:500;font-size:13px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.pi-info{font-size:11px;color:var(--mu);margin-top:1px}
+.empty{padding:40px 20px;text-align:center;color:var(--mu);font-size:13px}
+
+/* form */
+.form-head{padding:9px 12px;border-bottom:1px solid var(--bd);display:flex;align-items:center;gap:8px;flex-shrink:0}
+.form-body{flex:1;overflow-y:auto;padding:14px 12px}
+.form-foot{padding:10px 12px;border-top:1px solid var(--bd);flex-shrink:0}
+.section{margin-bottom:18px}
+.section-title{font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:.06em;color:var(--mu);margin-bottom:9px}
+.frow{margin-bottom:8px}
+.frow label{display:block;font-size:11px;font-weight:600;color:var(--mu);margin-bottom:3px}
+.frow input[type=text],.frow input[type=number],.frow textarea{width:100%;border:1px solid var(--bd);border-radius:5px;padding:6px 9px;font-size:13px;color:var(--tx);background:#fff;transition:border-color .15s,box-shadow .15s}
+.frow input:focus,.frow textarea:focus{outline:none;border-color:var(--pri);box-shadow:0 0 0 3px rgba(59,130,246,.15)}
+.frow textarea{resize:vertical;min-height:48px;font-family:inherit}
+.frow-2{display:grid;grid-template-columns:1fr 1fr;gap:8px}
+
+/* TTS rows */
+.tts-row{display:flex;align-items:flex-start;gap:6px;margin-bottom:10px}
+.lang-badge{width:26px;height:26px;border-radius:4px;background:#f1f5f9;border:1px solid var(--bd);display:flex;align-items:center;justify-content:center;font-size:10px;font-weight:700;color:var(--mu);flex-shrink:0;margin-top:19px}
+.tts-main{flex:1;min-width:0}
+.tts-main label{display:block;font-size:11px;font-weight:600;color:var(--mu);margin-bottom:3px}
+.tts-main textarea{width:100%;height:46px;border:1px solid var(--bd);border-radius:5px;padding:5px 8px;font-size:12px;resize:none;font-family:inherit;transition:border-color .15s}
+.tts-main textarea:focus{outline:none;border-color:var(--pri);box-shadow:0 0 0 3px rgba(59,130,246,.12)}
+.tts-btns{display:flex;flex-direction:column;gap:4px;margin-top:18px;flex-shrink:0}
+
+/* Audio section */
+.audio-card{display:flex;align-items:center;gap:8px;padding:8px 10px;background:#f8fafc;border:1px solid var(--bd);border-radius:6px;margin-bottom:8px}
+.audio-dot{width:8px;height:8px;border-radius:50%;flex-shrink:0}
+.dot-ok{background:var(--ok)}
+.dot-none{background:var(--bd2)}
+.audio-name{flex:1;font-size:12px;color:var(--tx);overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.audio-name.none{color:var(--mu)}
+.upload-row{display:flex;align-items:center;gap:8px}
+.upload-row input[type=file]{display:none}
+#upload-status{font-size:11px;color:var(--mu)}
+
+/* Generated audio pills */
+.gen-files{margin-top:8px;display:flex;flex-wrap:wrap;gap:5px}
+.gen-pill{display:flex;align-items:center;gap:4px;padding:3px 8px;border-radius:20px;font-size:11px;border:1px solid var(--bd);background:#fff}
+.gen-pill.is-active{border-color:var(--pri);background:#eff6ff;color:var(--pri)}
+.gen-pill .pill-lang{font-weight:700;font-size:10px}
+
+/* Buttons */
+.btn{display:inline-flex;align-items:center;justify-content:center;gap:4px;padding:6px 12px;border-radius:5px;font-size:13px;font-weight:500;cursor:pointer;border:none;transition:background .15s,opacity .15s;white-space:nowrap;line-height:1}
+.btn:disabled{opacity:.5;cursor:not-allowed}
+.btn-pri{background:var(--pri);color:#fff}.btn-pri:hover:not(:disabled){background:var(--pri-h)}
+.btn-del{background:var(--del);color:#fff}.btn-del:hover:not(:disabled){background:var(--del-h)}
+.btn-ok{background:var(--ok);color:#fff}.btn-ok:hover:not(:disabled){background:var(--ok-h)}
+.btn-ghost{background:transparent;color:var(--tx);border:1px solid var(--bd2)}.btn-ghost:hover:not(:disabled){background:#f1f5f9}
+.btn-sm{padding:4px 8px;font-size:12px}
+.btn-xs{padding:2px 6px;font-size:11px}
+.btn-full{width:100%;justify-content:center}
+
+/* toast */
+#toast{position:fixed;bottom:20px;left:50%;transform:translateX(-50%);background:#1e293b;color:#f8fafc;padding:8px 18px;border-radius:6px;font-size:13px;pointer-events:none;opacity:0;transition:opacity .2s;z-index:9999}
+#toast.show{opacity:1}
+</style>
+</head>
+<body>
+
+<div id="hdr">
+  <h1 id="hdr-title">AR Audio Admin</h1>
+  <label for="sel-lang" id="lbl-ui-lang">UI:</label>
+  <select id="sel-lang" onchange="setLang(this.value)">
+    <option value="ja">日本語</option>
+    <option value="en">English</option>
+    <option value="zh">中文</option>
+  </select>
+</div>
+
+<div id="body">
+  <div id="map"></div>
+  <aside id="sidebar">
+
+    <!-- List View -->
+    <div id="view-list">
+      <div class="sb-toolbar">
+        <span class="ttl" id="lbl-list-title">地点リスト</span>
+        <button class="btn btn-pri btn-sm" id="btn-add" onclick="startAddMode()">+ 地点を追加</button>
+      </div>
+      <div id="add-hint">
+        <span id="lbl-click-map">地図をクリックして追加</span>
+        <button class="btn btn-ghost btn-xs" id="btn-cancel-add" onclick="stopAddMode()">キャンセル</button>
+      </div>
+      <div id="point-list"></div>
+    </div>
+
+    <!-- Form View -->
+    <div id="view-form">
+      <div class="form-head">
+        <button class="btn btn-ghost btn-sm" onclick="showList()">← <span id="lbl-back">戻る</span></button>
+        <span style="flex:1"></span>
+        <button class="btn btn-del btn-sm" id="btn-del" onclick="confirmDelete()"><span id="lbl-delete">削除</span></button>
+      </div>
+      <div class="form-body" id="form-body"></div>
+      <div class="form-foot">
+        <button class="btn btn-pri btn-full" id="btn-save" onclick="savePoint()"><span id="lbl-save">保存</span></button>
+      </div>
+    </div>
+
+  </aside>
+</div>
+
+<div id="toast"></div>
+
+<script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+<script>
+// ── i18n ───────────────────────────────────────────────────────────────────────
+const I18N = {
+  ja:{
+    title:'AR音声管理',listTitle:'地点リスト',addPoint:'+ 地点を追加',
+    back:'戻る',save:'保存',delete:'削除',cancel:'キャンセル',
+    clickMap:'地図をクリックして追加',cancelAdd:'追加キャンセル',
+    noPoints:'地点がありません\n地図上でクリックして追加してください',
+    confirmDel:'この地点を削除しますか？',
+    genTTS:'音声生成',preview:'試聴',upload:'アップロード',setActive:'使用に設定',
+    name:'名前',radius:'半径 (m)',lat:'緯度',lon:'経度',
+    ttsSection:'TTS テキスト',audioSection:'音声ファイル',
+    noAudio:'音声ファイルなし',noTtsKey:'GOOGLE_TTS_KEY が未設定です',
+    noTtsText:'テキストが空です',generating:'生成中…',uploading:'アップロード中…',
+    saved:'保存しました',generated:'音声を生成しました',uploaded:'アップロードしました',
+    activeSet:'使用ファイルを変更しました',saveFirst:'先にポイントを保存してください',
+    active:'使用中',langJa:'日本語',langEn:'English',langZh:'中文',
+    uiLang:'UI:',dragMarker:'マーカーをドラッグして位置を変更',
+  },
+  en:{
+    title:'AR Audio Admin',listTitle:'Point List',addPoint:'+ Add Point',
+    back:'Back',save:'Save',delete:'Delete',cancel:'Cancel',
+    clickMap:'Click on map to add a point',cancelAdd:'Cancel Add',
+    noPoints:'No points yet\nClick on the map to add one',
+    confirmDel:'Delete this point?',
+    genTTS:'Generate TTS',preview:'Preview',upload:'Upload',setActive:'Set Active',
+    name:'Name',radius:'Radius (m)',lat:'Latitude',lon:'Longitude',
+    ttsSection:'TTS Texts',audioSection:'Audio File',
+    noAudio:'No audio file',noTtsKey:'GOOGLE_TTS_KEY is not configured',
+    noTtsText:'TTS text is empty',generating:'Generating…',uploading:'Uploading…',
+    saved:'Saved',generated:'Audio generated',uploaded:'Uploaded',
+    activeSet:'Active audio updated',saveFirst:'Save the point first',
+    active:'Active',langJa:'日本語',langEn:'English',langZh:'中文',
+    uiLang:'UI:',dragMarker:'Drag marker to reposition',
+  },
+  zh:{
+    title:'AR音频管理',listTitle:'地点列表',addPoint:'+ 添加地点',
+    back:'返回',save:'保存',delete:'删除',cancel:'取消',
+    clickMap:'点击地图添加地点',cancelAdd:'取消添加',
+    noPoints:'暂无地点\n点击地图添加',
+    confirmDel:'删除此地点？',
+    genTTS:'生成语音',preview:'试听',upload:'上传',setActive:'设为活动',
+    name:'名称',radius:'半径 (m)',lat:'纬度',lon:'经度',
+    ttsSection:'TTS 文本',audioSection:'音频文件',
+    noAudio:'无音频文件',noTtsKey:'GOOGLE_TTS_KEY 未配置',
+    noTtsText:'文本为空',generating:'生成中…',uploading:'上传中…',
+    saved:'已保存',generated:'语音已生成',uploaded:'已上传',
+    activeSet:'已更新活动文件',saveFirst:'请先保存地点',
+    active:'使用中',langJa:'日本語',langEn:'English',langZh:'中文',
+    uiLang:'UI:',dragMarker:'拖动标记以移动位置',
+  },
+};
+function t(k){return(I18N[lang]||I18N.ja)[k]||k}
+
+const TTSLANGS=[
+  {key:'ja',badge:'JA',labelKey:'langJa'},
+  {key:'en',badge:'EN',labelKey:'langEn'},
+  {key:'zh',badge:'ZH',labelKey:'langZh'},
+];
+
+// ── State ──────────────────────────────────────────────────────────────────────
+let lang='ja', points=[], editing=null, addMode=false;
+let map, markers={}, circles={};
+
+// ── Map ────────────────────────────────────────────────────────────────────────
+function initMap(){
+  map=L.map('map').setView([35.68,139.76],13);
+  L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png',{
+    attribution:'© <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a>',
+    maxZoom:19,
+  }).addTo(map);
+  map.on('click',onMapClick);
+}
+
+function makeIcon(color,size=14){
+  return L.divIcon({
+    html:`<div style="width:${size}px;height:${size}px;border-radius:50%;background:${color};border:2px solid #fff;box-shadow:0 1px 4px rgba(0,0,0,.4)"></div>`,
+    className:'',iconSize:[size,size],iconAnchor:[size/2,size/2],
+  });
+}
+
+function renderMarkers(){
+  Object.values(markers).forEach(m=>map.removeLayer(m));
+  Object.values(circles).forEach(c=>map.removeLayer(c));
+  markers={};circles={};
+  points.forEach(p=>{
+    const sel=editing&&editing.id===p.id;
+    const color=sel?'#3b82f6':'#ef4444';
+    const m=L.marker([p.latitude,p.longitude],{
+      icon:makeIcon(color,sel?16:12),
+      title:p.name,
+      draggable:sel,
+      zIndexOffset:sel?1000:0,
+    }).addTo(map).on('click',()=>selectPoint(p.id));
+    if(sel){
+      m.on('drag',e=>{
+        const{lat,lng}=e.target.getLatLng();
+        const fi=document.getElementById('f-lat');
+        const fj=document.getElementById('f-lon');
+        if(fi)fi.value=lat.toFixed(6);
+        if(fj)fj.value=lng.toFixed(6);
+        circles[p.id]&&circles[p.id].setLatLng([lat,lng]);
+      });
+    }
+    const c=L.circle([p.latitude,p.longitude],{
+      radius:p.radius,color,fillColor:color,
+      fillOpacity:.12,weight:sel?2:1.5,
+    }).addTo(map);
+    markers[p.id]=m;circles[p.id]=c;
+  });
+}
+
+function onMapClick(e){
+  if(!addMode)return;
+  stopAddMode();
+  openForm(null,e.latlng.lat,e.latlng.lng);
+}
+
+// ── Add mode ───────────────────────────────────────────────────────────────────
+function startAddMode(){
+  addMode=true;
+  document.getElementById('add-hint').style.display='flex';
+  document.getElementById('btn-add').disabled=true;
+  map.getContainer().style.cursor='crosshair';
+}
+function stopAddMode(){
+  addMode=false;
+  document.getElementById('add-hint').style.display='none';
+  document.getElementById('btn-add').disabled=false;
+  map.getContainer().style.cursor='';
+}
+
+// ── Data loading ───────────────────────────────────────────────────────────────
+async function refreshPoints(){
+  const r=await fetch('/api/points');
+  points=await r.json();
+  renderList();
+  renderMarkers();
+  if(points.length){
+    map.fitBounds(points.map(p=>[p.latitude,p.longitude]),{padding:[40,40],maxZoom:16});
+  }
+}
+
+// ── List ───────────────────────────────────────────────────────────────────────
+function renderList(){
+  const el=document.getElementById('point-list');
+  if(!points.length){
+    el.innerHTML=`<div class="empty">${h(t('noPoints'))}</div>`;
+    return;
+  }
+  el.innerHTML=points.map(p=>`
+    <div class="point-item${editing&&editing.id===p.id?' active':''}" onclick="selectPoint('${p.id}')">
+      <div class="pi-dot"></div>
+      <div class="pi-text">
+        <div class="pi-name">${h(p.name)}</div>
+        <div class="pi-info">${p.latitude.toFixed(5)}, ${p.longitude.toFixed(5)} · r=${p.radius}m${p.audio_file?` · 🔊`:''}</div>
+      </div>
+    </div>`).join('');
+}
+
+// ── Form ───────────────────────────────────────────────────────────────────────
+function selectPoint(id){
+  const p=points.find(x=>x.id===id);
+  if(!p)return;
+  editing=p;
+  openForm(p);
+  map.panTo([p.latitude,p.longitude]);
+  renderMarkers();
+  renderList();
+}
+
+function openForm(point,defLat,defLon){
+  editing=point;
+  document.getElementById('view-list').style.display='none';
+  document.getElementById('view-form').style.display='flex';
+  document.getElementById('btn-del').style.display=point?'':'none';
+  const p=point||{id:null,name:'',latitude:defLat||35.68,longitude:defLon||139.76,radius:10,tts_texts:{},audio_file:null,audio_files:{}};
+  buildForm(p);
+}
+
+function buildForm(p){
+  const af=p.audio_files||{};
+  const ttsRows=TTSLANGS.map(l=>{
+    const hasFile=af[l.key];
+    const isActive=p.audio_file&&p.audio_file===af[l.key];
+    return `
+    <div class="tts-row">
+      <div class="lang-badge">${l.badge}</div>
+      <div class="tts-main">
+        <label>${t(l.labelKey)}</label>
+        <textarea id="tts-${l.key}" placeholder="${t(l.labelKey)}...">${h((p.tts_texts||{})[l.key]||'')}</textarea>
+      </div>
+      <div class="tts-btns">
+        <button class="btn btn-ghost btn-sm" id="btn-gen-${l.key}" onclick="generateTTS('${l.key}')">${t('genTTS')}</button>
+        ${hasFile?`<button class="btn btn-ghost btn-xs" onclick="previewAudio('${h(af[l.key])}')">▶</button>`:''}
+      </div>
+    </div>`;
+  }).join('');
+
+  // Build generated files pills
+  const pills=TTSLANGS.filter(l=>af[l.key]).map(l=>`
+    <div class="gen-pill${p.audio_file===af[l.key]?' is-active':''}">
+      <span class="pill-lang">${l.badge}</span>
+      <span>${h(af[l.key])}</span>
+      ${p.audio_file!==af[l.key]?`<button class="btn btn-xs btn-ghost" style="padding:1px 5px" onclick="setActiveAudio('${h(af[l.key])}')">${t('setActive')}</button>`:`<span style="font-size:10px;color:var(--pri)">${t('active')}</span>`}
+    </div>`).join('');
+
+  const audioCard=p.audio_file
+    ?`<div class="audio-card"><div class="audio-dot dot-ok"></div><span class="audio-name">${h(p.audio_file)}</span><button class="btn btn-ghost btn-xs" onclick="previewAudio('${h(p.audio_file)}')">▶ ${t('preview')}</button></div>`
+    :`<div class="audio-card"><div class="audio-dot dot-none"></div><span class="audio-name none">${t('noAudio')}</span></div>`;
+
+  document.getElementById('form-body').innerHTML=`
+    <div class="section">
+      <div class="frow">
+        <label>${t('name')}</label>
+        <input type="text" id="f-name" value="${h(p.name)}" placeholder="${t('name')}">
+      </div>
+      <div class="frow">
+        <label>${t('radius')}</label>
+        <input type="number" id="f-radius" value="${p.radius}" min="1" step="1">
+      </div>
+      <div class="frow-2">
+        <div class="frow">
+          <label>${t('lat')}</label>
+          <input type="number" id="f-lat" value="${p.latitude}" step="0.000001">
+        </div>
+        <div class="frow">
+          <label>${t('lon')}</label>
+          <input type="number" id="f-lon" value="${p.longitude}" step="0.000001">
+        </div>
+      </div>
+      <div style="font-size:11px;color:var(--mu);margin-top:2px">💡 ${t('dragMarker')}</div>
+    </div>
+    <div class="section">
+      <div class="section-title">${t('ttsSection')}</div>
+      ${ttsRows}
+    </div>
+    <div class="section">
+      <div class="section-title">${t('audioSection')}</div>
+      ${audioCard}
+      ${pills?`<div class="gen-files">${pills}</div>`:''}
+      <div class="upload-row" style="margin-top:8px">
+        <label for="f-upload" class="btn btn-ghost btn-sm">📁 ${t('upload')}</label>
+        <input type="file" id="f-upload" accept="audio/*" onchange="uploadAudio(this)">
+        <span id="upload-status"></span>
+      </div>
+    </div>`;
+}
+
+function showList(){
+  editing=null;
+  document.getElementById('view-list').style.display='flex';
+  document.getElementById('view-form').style.display='none';
+  renderMarkers();
+  renderList();
+}
+
+// ── Save ───────────────────────────────────────────────────────────────────────
+async function savePoint(silent=false){
+  const btn=document.getElementById('btn-save');
+  const name=(document.getElementById('f-name')?.value||'').trim();
+  const lat=parseFloat(document.getElementById('f-lat')?.value);
+  const lon=parseFloat(document.getElementById('f-lon')?.value);
+  const radius=parseFloat(document.getElementById('f-radius')?.value)||10;
+  if(!name){toast(t('name')+' is required','del');return null;}
+
+  const tts_texts={};
+  for(const l of TTSLANGS){
+    const v=(document.getElementById(`tts-${l.key}`)?.value||'').trim();
+    if(v)tts_texts[l.key]=v;
+  }
+
+  if(btn)btn.disabled=true;
+  try{
+    const body={name,latitude:lat,longitude:lon,radius,tts_texts,
+      audio_file:editing?.audio_file||null,
+      audio_files:editing?.audio_files||{}};
+    let saved;
+    if(editing?.id){
+      const r=await fetch(`/api/points/${editing.id}`,{method:'PUT',headers:{'Content-Type':'application/json'},body:JSON.stringify(body)});
+      if(!r.ok)throw new Error((await r.json()).detail||r.statusText);
+      saved=await r.json();
+    }else{
+      const r=await fetch('/api/points',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(body)});
+      if(!r.ok)throw new Error((await r.json()).detail||r.statusText);
+      saved=await r.json();
+    }
+    editing=saved;
+    const idx=points.findIndex(p=>p.id===saved.id);
+    if(idx>=0)points[idx]=saved;else points.push(saved);
+    if(!silent){
+      renderList();renderMarkers();buildForm(saved);
+      toast(t('saved'),'ok');
+    }
+    return saved;
+  }catch(e){
+    toast('Error: '+e.message,'del');
+    return null;
+  }finally{
+    if(btn)btn.disabled=false;
+  }
+}
+
+async function confirmDelete(){
+  if(!editing?.id)return;
+  if(!confirm(t('confirmDel')))return;
+  const r=await fetch(`/api/points/${editing.id}`,{method:'DELETE'});
+  if(!r.ok){toast('Delete failed','del');return;}
+  editing=null;
+  await refreshPoints();
+  showList();
+}
+
+// ── TTS ────────────────────────────────────────────────────────────────────────
+async function generateTTS(l){
+  const text=(document.getElementById(`tts-${l}`)?.value||'').trim();
+  if(!text){toast(t('noTtsText'),'del');return;}
+
+  // auto-save (silently) to persist tts_text and get an id if new
+  const saved=await savePoint(true);
+  if(!saved)return;
+
+  const btn=document.getElementById(`btn-gen-${l}`);
+  if(btn){btn.disabled=true;btn.textContent=t('generating');}
+  try{
+    const r=await fetch(`/api/points/${saved.id}/tts?lang=${l}`,{method:'POST'});
+    if(!r.ok){const e=await r.json();throw new Error(e.detail||r.statusText);}
+    await refreshPointData(saved.id);
+    toast(t('generated'),'ok');
+  }catch(e){
+    toast('TTS: '+e.message,'del');
+  }finally{
+    if(btn){btn.disabled=false;btn.textContent=t('genTTS');}
+  }
+}
+
+// ── Audio ──────────────────────────────────────────────────────────────────────
+function previewAudio(fname){
+  new Audio(`/audio/${fname}`).play().catch(e=>toast('Playback: '+e.message,'del'));
+}
+
+async function setActiveAudio(fname){
+  if(!editing?.id)return;
+  const r=await fetch(`/api/points/${editing.id}/set_active_audio?filename=${encodeURIComponent(fname)}`,{method:'POST'});
+  if(!r.ok){toast('Failed','del');return;}
+  await refreshPointData(editing.id);
+  toast(t('activeSet'),'ok');
+}
+
+async function uploadAudio(input){
+  if(!input.files.length)return;
+  if(!editing?.id){
+    const saved=await savePoint(true);
+    if(!saved){input.value='';return;}
+  }
+  const st=document.getElementById('upload-status');
+  if(st)st.textContent=t('uploading');
+  const fd=new FormData();
+  fd.append('file',input.files[0]);
+  try{
+    const r=await fetch(`/api/points/${editing.id}/upload`,{method:'POST',body:fd});
+    if(!r.ok)throw new Error((await r.json()).detail||r.statusText);
+    await refreshPointData(editing.id);
+    toast(t('uploaded'),'ok');
+  }catch(e){
+    toast('Upload: '+e.message,'del');
+  }finally{
+    if(st)st.textContent='';
+    input.value='';
+  }
+}
+
+async function refreshPointData(id){
+  const r=await fetch('/api/points');
+  points=await r.json();
+  const p=points.find(x=>x.id===id);
+  if(p){editing=p;buildForm(p);}
+  renderList();renderMarkers();
+}
+
+// ── i18n ───────────────────────────────────────────────────────────────────────
+function setLang(l){
+  lang=l;
+  document.getElementById('hdr-title').textContent=t('title');
+  document.getElementById('lbl-list-title').textContent=t('listTitle');
+  document.getElementById('btn-add').textContent=t('addPoint');
+  document.getElementById('lbl-click-map').textContent=t('clickMap');
+  document.getElementById('btn-cancel-add').textContent=t('cancelAdd');
+  document.getElementById('lbl-back').textContent=t('back');
+  document.getElementById('lbl-save').textContent=t('save');
+  document.getElementById('lbl-delete').textContent=t('delete');
+  document.getElementById('lbl-ui-lang').textContent=t('uiLang');
+  renderList();
+  if(editing)buildForm(editing);
+}
+
+// ── Toast ──────────────────────────────────────────────────────────────────────
+let toastTimer;
+function toast(msg,type='ok'){
+  const el=document.getElementById('toast');
+  el.textContent=msg;
+  el.style.background=type==='ok'?'#1e293b':type==='del'?'#ef4444':'#1e293b';
+  el.classList.add('show');
+  clearTimeout(toastTimer);
+  toastTimer=setTimeout(()=>el.classList.remove('show'),2500);
+}
+
+// ── Utils ──────────────────────────────────────────────────────────────────────
+function h(s){
+  if(s==null)return'';
+  return String(s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');
+}
+
+// ── Boot ───────────────────────────────────────────────────────────────────────
+initMap();
+refreshPoints();
+</script>
+</body>
+</html>

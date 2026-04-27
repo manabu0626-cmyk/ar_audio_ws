@@ -1,0 +1,37 @@
+[Unit]
+Description=AR Audio Admin WebUI (FastAPI, port 8080)
+Documentation=https://github.com/your-org/ar_audio_ws
+After=network.target
+
+[Service]
+Type=simple
+User=pc
+Group=pc
+WorkingDirectory=/home/pc/ar_audio_ws
+
+# ── Paths ─────────────────────────────────────────────────────────────────────
+# Override these if your yaml/audio files live elsewhere.
+Environment=AR_POINTS_FILE=/home/pc/ar_audio_ws/src/ar_audio/config/ar_points.yaml
+Environment=AUDIO_BASE_PATH=/home/pc/ar_audio_ws/src/ar_audio/audio
+
+# ── Google Cloud TTS API key ──────────────────────────────────────────────────
+# Uncomment and set your key, or use an EnvironmentFile for secrets.
+#Environment=GOOGLE_TTS_KEY=YOUR_API_KEY_HERE
+#EnvironmentFile=/etc/ar_audio_admin.env
+
+# ── Python path so ar_audio package is importable ────────────────────────────
+Environment=PYTHONPATH=/home/pc/ar_audio_ws/src
+
+ExecStart=/usr/bin/python3 -m uvicorn ar_audio.admin.app:app \
+    --host 0.0.0.0 \
+    --port 8080 \
+    --workers 1
+
+Restart=on-failure
+RestartSec=5
+StandardOutput=journal
+StandardError=journal
+SyslogIdentifier=ar_audio_admin
+
+[Install]
+WantedBy=multi-user.target
