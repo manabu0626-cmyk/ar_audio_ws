@@ -2,7 +2,6 @@
 Description=AR Audio Admin WebUI (FastAPI, port 8080)
 Documentation=https://github.com/your-org/ar_audio_ws
 After=network.target
-
 [Service]
 Type=simple
 User=pc
@@ -16,7 +15,7 @@ Environment=AUDIO_BASE_PATH=/home/pc/ar_audio_ws/src/ar_audio/audio
 
 # ── Google Cloud TTS API key ──────────────────────────────────────────────────
 # Uncomment and set your key, or use an EnvironmentFile for secrets.
-#Environment=GOOGLE_TTS_KEY=YOUR_API_KEY_HERE
+#Environment=GOOGLE_TTS_KEY=AIzaSyAF37TmirKhYrfFzipYcrLmGWjMnbD_qw8
 #EnvironmentFile=/etc/ar_audio_admin.env
 
 # ── Python path so ar_audio package is importable ────────────────────────────

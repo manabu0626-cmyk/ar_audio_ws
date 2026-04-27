@@ -20,3 +20,11 @@ ar_points:
   audio_file: imperial_garden.mp3
   radius: 30.0
   id: 4d713828
+- name: Sakuradamon
+  latitude: 35.67778237006281
+  longitude: 139.7533464431763
+  audio_file: null
+  radius: 10.0
+  tts_texts: {}
+  audio_files: {}
+  id: 51b74346
