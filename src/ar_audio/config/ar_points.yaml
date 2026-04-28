@@ -2,17 +2,34 @@ ar_points:
 - name: Tokyo Station East Exit
   latitude: 35.680278
   longitude: 139.768056
-  audio_file: tokyo_station.wav
+  audio_file: 086d4015_en.mp3
   radius: 20.0
   tts_texts:
     ja: 本日は、ご乗車いただき誠にありがとうございます。左に見えますのが、八重洲中央口になります。お降りの際は左右を確認の上、お降りください。本日はご乗車いただき、誠にありがとうございます。
-  audio_files: {}
+  audio_files:
+    ja: 086d4015_ja.mp3
+    zh-CN: 086d4015_zh-CN.mp3
+    en: 086d4015_en.mp3
+    zh-TW: 086d4015_zh-TW.mp3
+    es: 086d4015_es.mp3
+    it: 086d4015_it.mp3
+    fr: 086d4015_fr.mp3
   id: 086d4015
 - name: Marunouchi Building
   latitude: 35.681111
   longitude: 139.765556
-  audio_file: marunouchi.mp3
+  audio_file: d9ee7a87_en.mp3
   radius: 15.0
+  tts_texts:
+    ja: Thank you for riding with our autonomous driving vehicle
+  audio_files:
+    ja: d9ee7a87_ja.mp3
+    zh-CN: d9ee7a87_zh-CN.mp3
+    en: d9ee7a87_en.mp3
+    zh-TW: d9ee7a87_zh-TW.mp3
+    es: d9ee7a87_es.mp3
+    it: d9ee7a87_it.mp3
+    fr: d9ee7a87_fr.mp3
   id: d9ee7a87
 - name: Imperial Palace East Garden
   latitude: 35.685278
@@ -23,8 +40,33 @@ ar_points:
 - name: Sakuradamon
   latitude: 35.67778237006281
   longitude: 139.7533464431763
-  audio_file: null
+  audio_file: 51b74346_en.mp3
   radius: 10.0
-  tts_texts: {}
-  audio_files: {}
+  tts_texts:
+    ja: 本日はご乗車ありがとうございます。安全に運行を心がけますが、屋も植えず急ブレーキをかける場合がございますので、ご注意ください。
+  audio_files:
+    ja: 51b74346_ja.mp3
+    zh-CN: 51b74346_zh-CN.mp3
+    es: 51b74346_es.mp3
+    en: 51b74346_en.mp3
+    zh-TW: 51b74346_zh-TW.mp3
+    it: 51b74346_it.mp3
+    fr: 51b74346_fr.mp3
   id: 51b74346
+- name: 茅ヶ崎イノベーション工場
+  latitude: 35.341225
+  longitude: 139.378237
+  audio_file: 40a9b28b_en.mp3
+  radius: 30.0
+  tts_texts:
+    ja: ご乗車ありがとうございます。茅ヶ崎イノベーション工場です。
+  audio_files:
+    ja: 40a9b28b_ja.mp3
+    en: 40a9b28b_en.mp3
+    zh-CN: 40a9b28b_zh-CN.mp3
+    es: 40a9b28b_es.mp3
+    zh-TW: 40a9b28b_zh-TW.mp3
+    ko: 40a9b28b_ko.mp3
+    it: 40a9b28b_it.mp3
+    fr: 40a9b28b_fr.mp3
+  id: 40a9b28b
