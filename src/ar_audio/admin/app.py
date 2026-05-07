@@ -266,12 +266,14 @@ def _gnss_relay_thread() -> None:
     if loop is None:
         return
 
-    # Use `ros2 topic echo` via subprocess so we don't need rclpy in the
-    # FastAPI process (avoids LD_LIBRARY_PATH issues with systemd services).
     cmd = (
         'source /opt/ros/humble/setup.bash && '
         'ros2 topic echo /sensing/gnss/fix sensor_msgs/msg/NavSatFix'
     )
+    # PYTHONUNBUFFERED=1: ros2 is a Python script; without this it uses
+    # block-buffering when stdout is a pipe (~8 KB delay).
+    env = dict(os.environ)
+    env['PYTHONUNBUFFERED'] = '1'
 
     while True:
         proc = None
@@ -279,37 +281,70 @@ def _gnss_relay_thread() -> None:
             proc = subprocess.Popen(
                 ['/bin/bash', '-c', cmd],
                 stdout=subprocess.PIPE,
-                stderr=subprocess.DEVNULL,
+                stderr=subprocess.PIPE,
                 text=True,
                 bufsize=1,
+                env=env,
             )
             logger.info('GNSS relay started (PID %d)', proc.pid)
 
             lat: Optional[float] = None
             lon: Optional[float] = None
+            msg_count = 0
+            line_count = 0
 
-            for line in proc.stdout:
-                line = line.strip()
+            # Use readline() explicitly — the for-loop iterator on TextIOWrapper
+            # can silently do read-ahead buffering that defeats PYTHONUNBUFFERED.
+            while True:
+                raw = proc.stdout.readline()
+                if not raw:   # subprocess closed stdout (EOF)
+                    break
+                line = raw.strip()
+                line_count += 1
+
+                # Raw line debug: log first 30 lines per subprocess session
+                if line_count <= 30:
+                    logger.info('GNSS raw[%d]: %r', line_count, line)
+
                 if line.startswith('latitude:'):
                     try:
-                        lat = float(line.split(':', 1)[1])
-                    except ValueError:
-                        pass
+                        lat = float(line.split(':', 1)[1].strip())
+                        logger.info('GNSS lat parsed: %.7f', lat)
+                    except ValueError as e:
+                        logger.warning('GNSS lat parse error: %r → %s', line, e)
+
                 elif line.startswith('longitude:'):
                     try:
-                        lon = float(line.split(':', 1)[1])
-                    except ValueError:
-                        pass
-                elif line == '---':
+                        lon = float(line.split(':', 1)[1].strip())
+                        logger.info('GNSS lon parsed: %.7f', lon)
+                    except ValueError as e:
+                        logger.warning('GNSS lon parse error: %r → %s', line, e)
+
+                    # Broadcast as soon as longitude arrives (latitude already set).
+                    # Don't wait for '---' — longitude is the last value we need.
                     if lat is not None and lon is not None:
+                        msg_count += 1
+                        n_clients = len(_ws_clients)
+                        logger.info(
+                            'GNSS broadcast #%d lat=%.6f lon=%.6f clients=%d',
+                            msg_count, lat, lon, n_clients,
+                        )
                         data = json.dumps({'lat': lat, 'lon': lon})
                         asyncio.run_coroutine_threadsafe(
                             _broadcast_gnss(data), loop
                         )
+                        lat = lon = None
+
+                elif line == '---':
+                    # Message boundary — reset any partial state
                     lat = lon = None
 
+            stderr_tail = proc.stderr.read(500)
             proc.wait()
-            logger.warning('GNSS relay subprocess exited (rc=%d)', proc.returncode)
+            logger.warning(
+                'GNSS relay subprocess exited (rc=%d, lines=%d) stderr=%r',
+                proc.returncode, line_count, stderr_tail,
+            )
         except Exception as exc:
             logger.warning('GNSS relay error: %s', exc)
         finally:

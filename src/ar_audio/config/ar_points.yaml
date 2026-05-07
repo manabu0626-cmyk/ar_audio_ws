@@ -2,7 +2,7 @@ ar_points:
 - name: Tokyo Station East Exit
   latitude: 35.680278
   longitude: 139.768056
-  audio_file: 086d4015_ja.mp3
+  audio_file: 086d4015_zh-CN.mp3
   radius: 20.0
   tts_texts:
     ja: 本日は、ご乗車いただき誠にありがとうございます。左に見えますのが、八重洲中央口になります。お降りの際は左右を確認の上、お降りください。本日はご乗車いただき、誠にありがとうございます。
@@ -18,7 +18,7 @@ ar_points:
 - name: Marunouchi Building
   latitude: 35.681111
   longitude: 139.765556
-  audio_file: d9ee7a87_ja.mp3
+  audio_file: d9ee7a87_zh-CN.mp3
   radius: 15.0
   tts_texts:
     ja: Thank you for riding with our autonomous driving vehicle
@@ -40,7 +40,7 @@ ar_points:
 - name: Sakuradamon
   latitude: 35.67778237006281
   longitude: 139.7533464431763
-  audio_file: 51b74346_ja.mp3
+  audio_file: 51b74346_zh-CN.mp3
   radius: 10.0
   tts_texts:
     ja: 本日はご乗車ありがとうございます。安全に運行を心がけますが、屋も植えず急ブレーキをかける場合がございますので、ご注意ください。
@@ -56,7 +56,7 @@ ar_points:
 - name: 茅ヶ崎イノベーション工場
   latitude: 35.341225
   longitude: 139.378237
-  audio_file: 40a9b28b_ja.mp3
+  audio_file: 40a9b28b_zh-CN.mp3
   radius: 30.0
   tts_texts:
     ja: ご乗車ありがとうございます。茅ヶ崎イノベーション工場です。
@@ -73,8 +73,8 @@ ar_points:
 - name: 高輪ゲートウェイシティー
   latitude: 35.63538609590601
   longitude: 139.74024921655655
-  audio_file: 48b2956a_ja.mp3
-  radius: 30.0
+  audio_file: 48b2956a_zh-CN.mp3
+  radius: 10.0
   tts_texts:
     ja: '高輪ゲートウェイシティーです。ひと、自然、テクノロジーをつなぎ、
 
@@ -90,4 +90,6 @@ ar_points:
       街を100年先の心豊かなくらしのための実験場と位置付け、多様なパートナー、周辺地域の方々との共創によるまちづくりを進めています。'
   audio_files:
     ja: 48b2956a_ja.mp3
+    en: 48b2956a_en.mp3
+    zh-CN: 48b2956a_zh-CN.mp3
   id: 48b2956a
