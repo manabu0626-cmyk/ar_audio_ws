@@ -230,39 +230,35 @@ const vehicleIcon = L.divIcon({
   popupAnchor: [0, -15],
 });
 
-function initGeolocation() {
-  if (!navigator.geolocation) return;
-  navigator.geolocation.watchPosition(
-    pos => {
-      const latlng = [pos.coords.latitude, pos.coords.longitude];
+function initGnssWebSocket() {
+  const wsUrl = `ws://${location.host}/ws/gnss`;
+  let ws;
+
+  function connect() {
+    ws = new WebSocket(wsUrl);
+
+    ws.onmessage = evt => {
+      let d;
+      try { d = JSON.parse(evt.data); } catch { return; }
+      const latlng = [d.lat, d.lon];
       if (!vehicleMarker) {
         vehicleMarker = L.marker(latlng, {icon: vehicleIcon, zIndexOffset: 2000})
-          .bindTooltip('現在地', {direction: 'top', offset: [0, -12], permanent: false})
+          .bindTooltip('車両位置', {direction: 'top', offset: [0, -12], permanent: false})
           .addTo(map);
-        if (pos.coords.accuracy) {
-          vehicleAccCircle = L.circle(latlng, {
-            radius: pos.coords.accuracy,
-            color: '#3b82f6', fillColor: '#3b82f6',
-            fillOpacity: 0.08, weight: 1, dashArray: '4',
-          }).addTo(map);
-        }
-        // First fix: always center on vehicle
         map.setView(latlng, Math.max(map.getZoom(), 16));
       } else {
         vehicleMarker.setLatLng(latlng);
-        if (vehicleAccCircle) {
-          vehicleAccCircle.setLatLng(latlng);
-          if (pos.coords.accuracy) vehicleAccCircle.setRadius(pos.coords.accuracy);
-        }
-        // Auto-follow only when not editing a point
-        if (followMode && !editing) {
-          map.panTo(latlng);
-        }
+        if (vehicleAccCircle) vehicleAccCircle.setLatLng(latlng);
+        if (followMode && !editing) map.panTo(latlng);
       }
-    },
-    err => console.warn('Geolocation:', err.message),
-    {enableHighAccuracy: true, maximumAge: 3000, timeout: 15000}
-  );
+    };
+
+    ws.onclose = () => setTimeout(connect, 2000);
+    ws.onerror = err => console.warn('GNSS WS error:', err);
+  }
+
+  connect();
+
   // Manual drag disables follow mode
   map.on('dragstart', () => {
     if (followMode) {
@@ -812,7 +808,7 @@ function h(s) {
 // ── Boot ───────────────────────────────────────────────────────────────────────
 async function init() {
   initMap();
-  initGeolocation();
+  initGnssWebSocket();
   await checkConfig();
   try {
     const r = await fetch('/api/language');

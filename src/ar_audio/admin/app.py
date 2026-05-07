@@ -1,15 +1,19 @@
+import asyncio
 import base64
+import json
 import logging
 import os
+import threading
 import uuid
 from pathlib import Path
-from typing import Dict, List, Optional
+from typing import Dict, List, Optional, Set
 
 import httpx
 import yaml
-from fastapi import FastAPI, File, HTTPException, UploadFile
+from fastapi import FastAPI, File, HTTPException, UploadFile, WebSocket
 from fastapi.responses import FileResponse, HTMLResponse, JSONResponse
 from pydantic import BaseModel, Field
+from starlette.websockets import WebSocketDisconnect
 
 logger = logging.getLogger("ar_audio_admin")
 logging.basicConfig(level=logging.INFO)
@@ -234,9 +238,78 @@ def _delete_point_audio_files(pid: str, langs: Optional[List[str]] = None) -> Li
     return deleted
 
 
+# ── WebSocket GNSS broadcast ────────────────────────────────────────────────────
+
+_ws_clients: Set[WebSocket] = set()
+_ws_clients_lock = threading.Lock()
+_main_loop: Optional[asyncio.AbstractEventLoop] = None
+
+
+async def _broadcast_gnss(payload: str) -> None:
+    dead = []
+    with _ws_clients_lock:
+        clients = list(_ws_clients)
+    for ws in clients:
+        try:
+            await ws.send_text(payload)
+        except Exception:
+            dead.append(ws)
+    if dead:
+        with _ws_clients_lock:
+            _ws_clients.difference_update(dead)
+
+
+def _gnss_relay_thread() -> None:
+    loop = _main_loop
+    if loop is None:
+        return
+    try:
+        import rclpy
+        from sensor_msgs.msg import NavSatFix
+
+        rclpy.init()
+        node = rclpy.create_node('ar_audio_admin_gnss')
+
+        def _cb(msg: NavSatFix) -> None:
+            if msg.status.status < 0:
+                return
+            data = json.dumps({'lat': msg.latitude, 'lon': msg.longitude})
+            asyncio.run_coroutine_threadsafe(_broadcast_gnss(data), loop)
+
+        node.create_subscription(NavSatFix, '/sensing/gnss/fix', _cb, 10)
+        rclpy.spin(node)
+        node.destroy_node()
+        rclpy.shutdown()
+    except Exception as exc:
+        logger.warning('GNSS relay thread exited: %s', exc)
+
+
 # ── FastAPI app ────────────────────────────────────────────────────────────────
 
 app = FastAPI(title="AR Audio Admin", version="2.0.0")
+
+
+@app.on_event('startup')
+async def _startup() -> None:
+    global _main_loop
+    _main_loop = asyncio.get_event_loop()
+    t = threading.Thread(target=_gnss_relay_thread, daemon=True)
+    t.start()
+
+
+@app.websocket('/ws/gnss')
+async def gnss_websocket(ws: WebSocket) -> None:
+    await ws.accept()
+    with _ws_clients_lock:
+        _ws_clients.add(ws)
+    try:
+        while True:
+            await ws.receive_text()
+    except WebSocketDisconnect:
+        pass
+    finally:
+        with _ws_clients_lock:
+            _ws_clients.discard(ws)
 
 
 @app.get("/", response_class=HTMLResponse)
