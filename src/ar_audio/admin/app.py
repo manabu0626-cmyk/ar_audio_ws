@@ -3,7 +3,9 @@ import base64
 import json
 import logging
 import os
+import subprocess
 import threading
+import time
 import uuid
 from pathlib import Path
 from typing import Dict, List, Optional, Set
@@ -263,25 +265,58 @@ def _gnss_relay_thread() -> None:
     loop = _main_loop
     if loop is None:
         return
-    try:
-        import rclpy
-        from sensor_msgs.msg import NavSatFix
 
-        rclpy.init()
-        node = rclpy.create_node('ar_audio_admin_gnss')
+    # Use `ros2 topic echo` via subprocess so we don't need rclpy in the
+    # FastAPI process (avoids LD_LIBRARY_PATH issues with systemd services).
+    cmd = (
+        'source /opt/ros/humble/setup.bash && '
+        'ros2 topic echo /sensing/gnss/fix sensor_msgs/msg/NavSatFix'
+    )
 
-        def _cb(msg: NavSatFix) -> None:
-            if msg.status.status < 0:
-                return
-            data = json.dumps({'lat': msg.latitude, 'lon': msg.longitude})
-            asyncio.run_coroutine_threadsafe(_broadcast_gnss(data), loop)
+    while True:
+        proc = None
+        try:
+            proc = subprocess.Popen(
+                ['/bin/bash', '-c', cmd],
+                stdout=subprocess.PIPE,
+                stderr=subprocess.DEVNULL,
+                text=True,
+                bufsize=1,
+            )
+            logger.info('GNSS relay started (PID %d)', proc.pid)
 
-        node.create_subscription(NavSatFix, '/sensing/gnss/fix', _cb, 10)
-        rclpy.spin(node)
-        node.destroy_node()
-        rclpy.shutdown()
-    except Exception as exc:
-        logger.warning('GNSS relay thread exited: %s', exc)
+            lat: Optional[float] = None
+            lon: Optional[float] = None
+
+            for line in proc.stdout:
+                line = line.strip()
+                if line.startswith('latitude:'):
+                    try:
+                        lat = float(line.split(':', 1)[1])
+                    except ValueError:
+                        pass
+                elif line.startswith('longitude:'):
+                    try:
+                        lon = float(line.split(':', 1)[1])
+                    except ValueError:
+                        pass
+                elif line == '---':
+                    if lat is not None and lon is not None:
+                        data = json.dumps({'lat': lat, 'lon': lon})
+                        asyncio.run_coroutine_threadsafe(
+                            _broadcast_gnss(data), loop
+                        )
+                    lat = lon = None
+
+            proc.wait()
+            logger.warning('GNSS relay subprocess exited (rc=%d)', proc.returncode)
+        except Exception as exc:
+            logger.warning('GNSS relay error: %s', exc)
+        finally:
+            if proc and proc.poll() is None:
+                proc.kill()
+
+        time.sleep(5)
 
 
 # ── FastAPI app ────────────────────────────────────────────────────────────────
