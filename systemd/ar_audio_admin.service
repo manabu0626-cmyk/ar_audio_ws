@@ -9,15 +9,15 @@ Group=pc
 WorkingDirectory=/home/pc/ar_audio_ws
 
 # ── Paths ─────────────────────────────────────────────────────────────────────
+# Override these if your yaml/audio files live elsewhere.
 Environment=AR_POINTS_FILE=/home/pc/ar_audio_ws/src/ar_audio/config/ar_points.yaml
 Environment=AUDIO_BASE_PATH=/home/pc/ar_audio_ws/src/ar_audio/audio
-Environment=AR_LANGUAGE_FILE=/home/pc/ar_audio_ws/src/ar_audio/config/language.yaml
-
-# ── API keys ──────────────────────────────────────────────────────────────────
-# Set GOOGLE_TTS_KEY and OPENAI_API_KEY here, or use EnvironmentFile for secrets.
-#Environment=GOOGLE_TTS_KEY=your_google_tts_key_here
-#Environment=OPENAI_API_KEY=your_openai_api_key_here
-#EnvironmentFile=/etc/ar_audio_admin.env
+Environment=ROS_DOMAIN_ID=22
+Environment=RMW_IMPLEMENTATION=rmw_cyclonedds_cpp
+Environment=ROS_LOCALHOST_ONLY=1
+# ── Google Cloud TTS API key ──────────────────────────────────────────────────
+# Uncomment and set your key, or use an EnvironmentFile for secrets.
+EnvironmentFile=/etc/ar_audio/credentials.env
 
 # ── Python path so ar_audio package is importable ────────────────────────────
 Environment=PYTHONPATH=/home/pc/ar_audio_ws/src

@@ -1,0 +1,35 @@
+[Unit]
+Description=AR Audio ROS2 Node (geofence-triggered audio playback)
+After=network.target sound.target
+Wants=network.target
+
+[Service]
+Type=simple
+User=pc
+Group=pc
+WorkingDirectory=/home/pc/ar_audio_ws
+
+# --- ROS2 environment (CRITICAL - learned from yesterday) ---
+Environment=ROS_DOMAIN_ID=22
+Environment=RMW_IMPLEMENTATION=rmw_cyclonedds_cpp
+Environment=ROS_LOCALHOST_ONLY=1
+
+# --- AR audio configuration ---
+Environment=AR_POINTS_FILE=/home/pc/ar_audio_ws/src/ar_audio/config/ar_points.yaml
+Environment=AUDIO_BASE_PATH=/home/pc/ar_audio_ws/src/ar_audio/audio
+Environment=AR_LANGUAGE_FILE=/home/pc/ar_audio_ws/src/ar_audio/config/language.yaml
+
+# --- Audio device access ---
+Environment=XDG_RUNTIME_DIR=/run/user/1000
+
+# --- Launch via bash to source ROS setup files ---
+ExecStart=/bin/bash -c 'source /opt/ros/humble/setup.bash && source /home/pc/ar_audio_ws/install/setup.bash && exec ros2 launch ar_audio ar_audio.launch.py'
+
+Restart=on-failure
+RestartSec=5
+StandardOutput=journal
+StandardError=journal
+SyslogIdentifier=ar_audio_node
+
+[Install]
+WantedBy=multi-user.target

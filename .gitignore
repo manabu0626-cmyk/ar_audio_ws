@@ -23,3 +23,15 @@ Thumbs.db
 # Audio files (add your own files — keep the directory tracked via .gitkeep)
 src/ar_audio/audio/*
 !src/ar_audio/audio/.gitkeep
+
+# === Secrets / Credentials ===
+*.env
+!*.env.example
+credentials.*
+!credentials.*.example
+secrets.yaml
+secrets.yml
+*_secret*
+*_token*
+*.key
+*.pem

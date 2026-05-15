@@ -33,8 +33,29 @@ sudo apt install -y \
 ### 1. リポジトリのクローン
 
 ```bash
-git clone https://github.com/<your-username>/ar_audio_ws.git
+git clone git@github.com:manabu0626-cmyk/ar_audio_ws.git
 cd ar_audio_ws
+```
+
+### 2. 認証情報ファイルの配置
+
+APIキーは `/etc/ar_audio/credentials.env` (root:root 600) で管理します。
+
+```bash
+sudo mkdir -p /etc/ar_audio
+sudo cp systemd/credentials.env.example /etc/ar_audio/credentials.env
+sudo chmod 600 /etc/ar_audio/credentials.env
+sudo chown root:root /etc/ar_audio/credentials.env
+# エディタで実際のAPIキーを入力
+sudo nano /etc/ar_audio/credentials.env
+```
+
+### 3. systemd サービスの配置・有効化
+
+```bash
+sudo cp systemd/*.service /etc/systemd/system/
+sudo systemctl daemon-reload
+sudo systemctl enable --now ar_audio_admin ar_audio_node
 ```
 
 ### 2. ビルド
