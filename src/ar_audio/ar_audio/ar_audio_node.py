@@ -31,6 +31,7 @@ class ARAudioNode(Node):
         self.declare_parameter('ar_points_file', '')
         self.declare_parameter('audio_base_path', '')
         self.declare_parameter('language_file', '')
+        self.declare_parameter('system_file', '')
         self.declare_parameter('gnss_topic', '/sensing/gnss/fix')
 
         # Prefer ROS parameters; fall back to env vars so that running without
@@ -47,11 +48,16 @@ class ARAudioNode(Node):
             self.get_parameter('language_file').value
             or os.environ.get('AR_LANGUAGE_FILE', '')
         )
+        system_file = (
+            self.get_parameter('system_file').value
+            or os.environ.get('AR_SYSTEM_FILE', '')
+        )
         gnss_topic = self.get_parameter('gnss_topic').value
 
         self.get_logger().info(f'audio_base_path : {self.audio_base_path!r}')
         self.get_logger().info(f'ar_points_file  : {points_file!r}')
         self.get_logger().info(f'language_file   : {language_file!r}')
+        self.get_logger().info(f'system_file     : {system_file!r}')
 
         # Language hot-reload state
         self._language_file_path: str = language_file
@@ -61,6 +67,15 @@ class ARAudioNode(Node):
         if language_file and os.path.exists(language_file):
             self._language_mtime = os.path.getmtime(language_file)
         self.get_logger().info(f'Playback language: {self.current_lang}')
+
+        # System config hot-reload state
+        self._system_file_path: str = system_file
+        self._system_mtime: float = 0.0
+
+        self.audio_enabled: bool = self._load_audio_enabled(system_file)
+        if system_file and os.path.exists(system_file):
+            self._system_mtime = os.path.getmtime(system_file)
+        self.get_logger().info(f'audio_enabled   : {self.audio_enabled}')
 
         self.ar_points: list[ARPoint] = []
         if points_file:
@@ -78,8 +93,9 @@ class ARAudioNode(Node):
             10,
         )
 
-        # Poll language.yaml every second for hot-reload
+        # Poll language.yaml and system.yaml every second for hot-reload
         self.create_timer(1.0, self._poll_language_file)
+        self.create_timer(1.0, self._poll_system_file)
 
         self.get_logger().info(
             f'AR Audio Node started: {len(self.ar_points)} points, topic={gnss_topic}'
@@ -117,6 +133,39 @@ class ARAudioNode(Node):
         except OSError as e:
             self.get_logger().warn(f'Cannot read language_file: {e}  →  using ja')
             return 'ja'
+
+    # ------------------------------------------------------------------
+    # System config hot-reload
+    # ------------------------------------------------------------------
+
+    def _poll_system_file(self) -> None:
+        path = self._system_file_path
+        if not path:
+            return
+        try:
+            mtime = os.path.getmtime(path)
+        except OSError:
+            return
+        if mtime == self._system_mtime:
+            return
+        self._system_mtime = mtime
+        new_enabled = self._load_audio_enabled(path)
+        if new_enabled != self.audio_enabled:
+            self.get_logger().info(
+                f'[SYSTEM] audio_enabled changed: {self.audio_enabled} → {new_enabled}'
+            )
+            self.audio_enabled = new_enabled
+
+    def _load_audio_enabled(self, system_file: str) -> bool:
+        if not system_file:
+            return True
+        try:
+            with open(system_file, 'r', encoding='utf-8') as f:
+                data = yaml.safe_load(f) or {}
+            return bool(data.get('audio_enabled', True))
+        except OSError as e:
+            self.get_logger().warn(f'Cannot read system_file: {e}  →  using audio_enabled=True')
+            return True
 
     # ------------------------------------------------------------------
     # Config loading
@@ -219,6 +268,9 @@ class ARAudioNode(Node):
         return ''
 
     def _play_audio(self, point: ARPoint) -> None:
+        if not self.audio_enabled:
+            self.get_logger().debug(f'[PLAY] audio_enabled=False, skip {point.name!r}')
+            return
         if point.playing:
             self.get_logger().debug(f'[PLAY] {point.name}: already playing, skip')
             return

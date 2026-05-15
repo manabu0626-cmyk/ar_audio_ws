@@ -67,6 +67,10 @@ LANGUAGE_FILE = Path(os.environ.get(
     "AR_LANGUAGE_FILE",
     str(_PKG / "config" / "language.yaml"),
 ))
+SYSTEM_FILE = Path(os.environ.get(
+    "AR_SYSTEM_FILE",
+    str(_PKG / "config" / "system.yaml"),
+))
 AUDIO_BASE = Path(os.environ.get(
     "AUDIO_BASE_PATH",
     str(_PKG / "audio"),
@@ -115,6 +119,10 @@ LANG_NAMES: Dict[str, str] = {
 }
 
 # ── models ─────────────────────────────────────────────────────────────────────
+
+class SystemConfigIn(BaseModel):
+    audio_enabled: bool
+
 
 class ARPointIn(BaseModel):
     name: str
@@ -168,6 +176,20 @@ def _save_language(lang: str) -> None:
     LANGUAGE_FILE.parent.mkdir(parents=True, exist_ok=True)
     with open(LANGUAGE_FILE, "w", encoding="utf-8") as f:
         yaml.dump({"language": lang}, f, allow_unicode=True, default_flow_style=False)
+
+
+def _load_system_config() -> dict:
+    if not SYSTEM_FILE.exists():
+        return {"audio_enabled": True}
+    with open(SYSTEM_FILE, "r", encoding="utf-8") as f:
+        data = yaml.safe_load(f) or {}
+    return {"audio_enabled": bool(data.get("audio_enabled", True))}
+
+
+def _save_system_config(cfg: dict) -> None:
+    SYSTEM_FILE.parent.mkdir(parents=True, exist_ok=True)
+    with open(SYSTEM_FILE, "w", encoding="utf-8") as f:
+        yaml.dump(cfg, f, allow_unicode=True, default_flow_style=False)
 
 
 # ── translation & TTS helpers ──────────────────────────────────────────────────
@@ -476,6 +498,18 @@ async def set_language(lang: str):
         logger.info("set_language(%s): updated audio_file for %d points", lang, updated)
 
     return {"language": lang, "updated_points": updated}
+
+
+@app.get("/api/system")
+async def get_system_config():
+    return _load_system_config()
+
+
+@app.put("/api/system")
+async def update_system_config(body: SystemConfigIn):
+    cfg = {"audio_enabled": body.audio_enabled}
+    _save_system_config(cfg)
+    return cfg
 
 
 @app.get("/api/lang_status")

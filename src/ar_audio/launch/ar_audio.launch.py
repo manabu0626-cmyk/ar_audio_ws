@@ -22,6 +22,10 @@ def generate_launch_description():
         'AR_LANGUAGE_FILE',
         os.path.join(_SRC_PKG, 'config', 'language.yaml'),
     )
+    default_system_file = os.environ.get(
+        'AR_SYSTEM_FILE',
+        os.path.join(_SRC_PKG, 'config', 'system.yaml'),
+    )
 
     return LaunchDescription([
         DeclareLaunchArgument(
@@ -40,6 +44,11 @@ def generate_launch_description():
             description='Path to language.yaml (hot-reloaded every 1 s)',
         ),
         DeclareLaunchArgument(
+            'system_file',
+            default_value=default_system_file,
+            description='Path to system.yaml (hot-reloaded every 1 s)',
+        ),
+        DeclareLaunchArgument(
             'gnss_topic',
             default_value='/sensing/gnss/fix',
             description='NavSatFix topic name',
@@ -53,6 +62,7 @@ def generate_launch_description():
                 'ar_points_file': LaunchConfiguration('ar_points_file'),
                 'audio_base_path': LaunchConfiguration('audio_base_path'),
                 'language_file': LaunchConfiguration('language_file'),
+                'system_file': LaunchConfiguration('system_file'),
                 'gnss_topic': LaunchConfiguration('gnss_topic'),
             }],
         ),

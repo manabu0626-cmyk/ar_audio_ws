@@ -126,6 +126,20 @@ body{font:14px/1.5 -apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif;color:
 /* map follow toggle */
 #follow-btn{position:absolute;bottom:30px;left:14px;z-index:1000;background:#fff;border:2px solid rgba(0,0,0,.2);border-radius:6px;padding:5px 9px;font-size:12px;font-weight:600;cursor:pointer;box-shadow:0 2px 6px rgba(0,0,0,.2);transition:background .15s}
 #follow-btn.following{background:#3b82f6;color:#fff;border-color:#3b82f6}
+
+/* ── Audio main switch ── */
+#audio-switch-wrap{display:flex;align-items:center;gap:6px;flex-shrink:0;margin-left:8px}
+.toggle-label{position:relative;display:inline-block;width:36px;height:20px;flex-shrink:0;cursor:pointer}
+.toggle-label input{opacity:0;width:0;height:0;position:absolute}
+.toggle-slider{position:absolute;inset:0;background:#475569;border-radius:20px;transition:.2s}
+.toggle-slider:before{position:absolute;content:'';height:14px;width:14px;left:3px;bottom:3px;background:#fff;border-radius:50%;transition:.2s}
+input:checked+.toggle-slider{background:#22c55e}
+input:checked+.toggle-slider:before{transform:translateX(16px)}
+#audio-switch-label{font-size:11px;white-space:nowrap}
+
+/* ── Audio OFF banner ── */
+#audio-off-warn{display:none;background:#7c3500;color:#fed7aa;font-size:12px;padding:6px 14px;flex-shrink:0;gap:8px;align-items:center}
+#audio-off-warn.show{display:flex}
 </style>
 </head>
 <body>
@@ -134,10 +148,20 @@ body{font:14px/1.5 -apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif;color:
   <div id="hdr-top">
     <h1>AR音声管理</h1>
     <div id="lang-btns"></div>
+    <div id="audio-switch-wrap" title="音声ガイドのON/OFF">
+      <label class="toggle-label">
+        <input type="checkbox" id="audio-switch" checked onchange="toggleAudioEnabled()">
+        <span class="toggle-slider"></span>
+      </label>
+      <span id="audio-switch-label" style="color:#86efac">音声: ON</span>
+    </div>
   </div>
 </div>
 <div id="config-warn">
   <span>⚠️</span><span id="config-warn-msg"></span>
+</div>
+<div id="audio-off-warn">
+  <span>🔇</span><span>音声ガイド無効 — geofenceに入っても音声は再生されません</span>
 </div>
 
 <div id="body">
@@ -207,6 +231,8 @@ const LANGS = [
 
 // ── State ──────────────────────────────────────────────────────────────────────
 let currentLang = 'ja';
+let audioEnabled = true;
+let _activeAudio = null;
 let points = [], langStatus = {}, editing = null, addMode = false;
 let map, markers = {}, circles = {};
 let vehicleMarker = null, vehicleAccCircle = null;
@@ -729,9 +755,61 @@ async function generateAllMissing() {
   toast(`全言語生成完了 (${ok}/${missing.length})`, 'ok');
 }
 
+// ── System config (audio main switch) ─────────────────────────────────────────
+async function loadSystemConfig() {
+  try {
+    const r = await fetch('/api/system');
+    const d = await r.json();
+    audioEnabled = d.audio_enabled !== false;
+    updateAudioSwitch();
+  } catch(e) {
+    console.warn('system config load failed:', e);
+  }
+}
+
+async function toggleAudioEnabled() {
+  const sw = document.getElementById('audio-switch');
+  audioEnabled = sw.checked;
+  try {
+    await fetch('/api/system', {
+      method: 'PUT',
+      headers: {'Content-Type': 'application/json'},
+      body: JSON.stringify({audio_enabled: audioEnabled}),
+    });
+    updateAudioSwitch();
+    toast(audioEnabled ? '音声ガイド: 有効' : '音声ガイド: 無効', audioEnabled ? 'ok' : 'del');
+  } catch(e) {
+    toast('切替エラー: ' + e.message, 'del');
+    audioEnabled = !audioEnabled;
+    sw.checked = audioEnabled;
+    updateAudioSwitch();
+  }
+}
+
+function updateAudioSwitch() {
+  const sw = document.getElementById('audio-switch');
+  const lbl = document.getElementById('audio-switch-label');
+  const warn = document.getElementById('audio-off-warn');
+  if (!sw) return;
+  sw.checked = audioEnabled;
+  if (lbl) {
+    lbl.textContent = audioEnabled ? '音声: ON' : '音声: OFF';
+    lbl.style.color = audioEnabled ? '#86efac' : '#f87171';
+  }
+  if (warn) warn.classList.toggle('show', !audioEnabled);
+}
+
 // ── Audio helpers ──────────────────────────────────────────────────────────────
 function previewAudio(fname) {
-  new Audio(`/audio/${fname}`).play().catch(e => toast('再生エラー: ' + e.message, 'del'));
+  if (_activeAudio) {
+    _activeAudio.pause();
+    _activeAudio.currentTime = 0;
+    _activeAudio = null;
+  }
+  const audio = new Audio(`/audio/${fname}`);
+  _activeAudio = audio;
+  audio.play().catch(e => toast('再生エラー: ' + e.message, 'del'));
+  audio.onended = () => { if (_activeAudio === audio) _activeAudio = null; };
 }
 
 async function uploadAudio(input) {
@@ -810,6 +888,7 @@ async function init() {
   initMap();
   initGnssWebSocket();
   await checkConfig();
+  await loadSystemConfig();
   try {
     const r = await fetch('/api/language');
     const d = await r.json();

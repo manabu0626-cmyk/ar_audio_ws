@@ -18,6 +18,7 @@ Environment=ROS_LOCALHOST_ONLY=1
 Environment=AR_POINTS_FILE=/home/pc/ar_audio_ws/src/ar_audio/config/ar_points.yaml
 Environment=AUDIO_BASE_PATH=/home/pc/ar_audio_ws/src/ar_audio/audio
 Environment=AR_LANGUAGE_FILE=/home/pc/ar_audio_ws/src/ar_audio/config/language.yaml
+Environment=AR_SYSTEM_FILE=/home/pc/ar_audio_ws/src/ar_audio/config/system.yaml
 
 # --- Audio device access ---
 Environment=XDG_RUNTIME_DIR=/run/user/1000
