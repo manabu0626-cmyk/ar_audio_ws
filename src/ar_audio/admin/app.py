@@ -128,10 +128,10 @@ class ARPointIn(BaseModel):
     name: str
     latitude: float
     longitude: float
-    audio_file: Optional[str] = None
     radius: float = 10.0
     tts_texts: Dict[str, str] = Field(default_factory=dict)
     audio_files: Dict[str, str] = Field(default_factory=dict)
+    audio_files_recorded: Dict[str, str] = Field(default_factory=dict)
 
 
 # ── YAML helpers ───────────────────────────────────────────────────────────────
@@ -419,6 +419,8 @@ async def create_point(body: ARPointIn):
     pts = _load()
     d = body.model_dump()
     d["id"] = uuid.uuid4().hex[:8]
+    if not d.get("audio_files_recorded"):
+        d.pop("audio_files_recorded", None)
     pts.append(d)
     _save(pts)
     return d
@@ -434,17 +436,21 @@ async def update_point(pid: str, body: ARPointIn):
 
             d = body.model_dump()
             d["id"] = pid
+            d.pop("audio_file", None)
 
             if old_ja_text != new_ja_text:
-                # Japanese source text changed → all derived mp3s are stale
+                # Japanese source text changed → TTS mp3s are stale; keep recorded
                 _delete_point_audio_files(pid)
                 d["audio_files"] = {}
-                d["audio_file"] = None
             else:
                 if not d.get("audio_files"):
                     d["audio_files"] = p.get("audio_files", {})
-                if d.get("audio_file") is None:
-                    d["audio_file"] = p.get("audio_file")
+
+            # Always preserve recorded audio across updates
+            if not d.get("audio_files_recorded"):
+                d["audio_files_recorded"] = p.get("audio_files_recorded", {})
+            if not d["audio_files_recorded"]:
+                d.pop("audio_files_recorded", None)
 
             pts[i] = d
             _save(pts)
@@ -455,11 +461,15 @@ async def update_point(pid: str, body: ARPointIn):
 @app.delete("/api/points/{pid}")
 async def delete_point(pid: str):
     pts = _load()
-    new_pts = [p for p in pts if p.get("id") != pid]
-    if len(new_pts) == len(pts):
+    target = next((p for p in pts if p.get("id") == pid), None)
+    if target is None:
         raise HTTPException(404, "Point not found")
     _delete_point_audio_files(pid)
-    _save(new_pts)
+    for fname in (target.get("audio_files_recorded") or {}).values():
+        fpath = AUDIO_BASE / fname
+        if fpath.exists():
+            fpath.unlink()
+    _save([p for p in pts if p.get("id") != pid])
     return {"ok": True}
 
 
@@ -491,11 +501,10 @@ async def set_language(lang: str):
         fname = f"{pid}_{lang}.mp3"
         if (AUDIO_BASE / fname).exists():
             p.setdefault("audio_files", {})[lang] = fname
-            p["audio_file"] = fname
             updated += 1
     if updated:
         _save(pts)
-        logger.info("set_language(%s): updated audio_file for %d points", lang, updated)
+        logger.info("set_language(%s): updated audio_files for %d points", lang, updated)
 
     return {"language": lang, "updated_points": updated}
 
@@ -547,9 +556,7 @@ async def generate_audio(pid: str, lang: str):
     fpath = AUDIO_BASE / fname
 
     if fpath.exists():
-        # still update audio_file pointer so the UI shows the correct active file
         pts[idx].setdefault("audio_files", {})[lang] = fname
-        pts[idx]["audio_file"] = fname
         _save(pts)
         return {"filename": fname, "cached": True, "bytes": fpath.stat().st_size}
 
@@ -557,7 +564,6 @@ async def generate_audio(pid: str, lang: str):
     nbytes = await _generate_tts(translated, lang, fpath)
 
     pts[idx].setdefault("audio_files", {})[lang] = fname
-    pts[idx]["audio_file"] = fname  # always switch active file to the generated language
     _save(pts)
 
     return {"filename": fname, "cached": False, "bytes": nbytes, "translated_text": translated}
@@ -586,7 +592,6 @@ async def regenerate_audio(pid: str, lang: str):
     nbytes = await _generate_tts(translated, lang, fpath)
 
     pts[idx].setdefault("audio_files", {})[lang] = fname
-    pts[idx]["audio_file"] = fname  # always switch active file to the generated language
     _save(pts)
 
     return {"filename": fname, "bytes": nbytes, "translated_text": translated}
@@ -619,31 +624,63 @@ async def generate_tts_legacy(pid: str, lang: str = "ja"):
     return await generate_audio(pid, lang)
 
 
-@app.post("/api/points/{pid}/upload")
-async def upload_audio(pid: str, file: UploadFile = File(...)):
+_ALLOWED_AUDIO_EXTS = {".mp3", ".wav", ".m4a", ".ogg", ".flac", ".aac"}
+
+
+@app.post("/api/points/{pid}/upload/{lang}")
+async def upload_audio(pid: str, lang: str, file: UploadFile = File(...)):
+    if lang not in SUPPORTED_LANGUAGES:
+        raise HTTPException(400, f"Unsupported language: {lang}")
+
     pts = _load()
     idx = next((i for i, p in enumerate(pts) if p.get("id") == pid), None)
     if idx is None:
         raise HTTPException(404, "Point not found")
 
     ext = Path(file.filename).suffix.lower() if file.filename else ".mp3"
-    fname = f"{pid}{ext}"
+    if ext not in _ALLOWED_AUDIO_EXTS:
+        raise HTTPException(400, f"Unsupported audio format: {ext}")
+
+    # Delete old recorded file for this lang if it exists
+    old_fname = (pts[idx].get("audio_files_recorded") or {}).get(lang, "")
+    if old_fname:
+        old_path = AUDIO_BASE / old_fname
+        if old_path.exists():
+            old_path.unlink()
+
+    fname = f"{pid}_{lang}_rec{ext}"
     (AUDIO_BASE / fname).write_bytes(await file.read())
 
-    pts[idx]["audio_file"] = fname
+    pts[idx].setdefault("audio_files_recorded", {})[lang] = fname
     _save(pts)
     return {"filename": fname}
 
 
-@app.post("/api/points/{pid}/set_active_audio")
-async def set_active_audio(pid: str, filename: str):
+@app.delete("/api/points/{pid}/audio_recorded/{lang}")
+async def delete_recorded_audio(pid: str, lang: str):
     pts = _load()
     idx = next((i for i, p in enumerate(pts) if p.get("id") == pid), None)
     if idx is None:
         raise HTTPException(404, "Point not found")
-    pts[idx]["audio_file"] = filename
+
+    rec = pts[idx].get("audio_files_recorded") or {}
+    fname = rec.get(lang, "")
+    if not fname:
+        raise HTTPException(404, f"No recorded audio for language: {lang}")
+
+    # Update YAML first (transaction: safe state first, then delete file)
+    del rec[lang]
+    if rec:
+        pts[idx]["audio_files_recorded"] = rec
+    else:
+        pts[idx].pop("audio_files_recorded", None)
     _save(pts)
-    return {"ok": True}
+
+    fpath = AUDIO_BASE / fname
+    if fpath.exists():
+        fpath.unlink()
+
+    return {"ok": True, "deleted": fname}
 
 
 @app.get("/api/config_status")

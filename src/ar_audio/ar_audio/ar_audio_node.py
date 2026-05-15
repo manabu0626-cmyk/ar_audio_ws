@@ -17,8 +17,8 @@ class ARPoint:
     name: str
     latitude: float
     longitude: float
-    audio_file: str          # fallback filename
-    audio_files: Dict[str, str]  # lang → filename
+    audio_files: Dict[str, str]           # lang → TTS filename
+    audio_files_recorded: Dict[str, str]  # lang → recorded filename (priority)
     radius: float = 10.0
     inside: bool = field(default=False, repr=False)
     playing: bool = field(default=False, repr=False)
@@ -186,8 +186,8 @@ class ARAudioNode(Node):
                     name=entry['name'],
                     latitude=float(entry['latitude']),
                     longitude=float(entry['longitude']),
-                    audio_file=entry.get('audio_file') or '',
                     audio_files=entry.get('audio_files') or {},
+                    audio_files_recorded=entry.get('audio_files_recorded') or {},
                     radius=float(entry.get('radius', 10.0)),
                 )
                 self.ar_points.append(point)
@@ -237,7 +237,16 @@ class ARAudioNode(Node):
         def _make_path(fname: str) -> str:
             return os.path.join(base, fname) if base else fname
 
-        # 1. Language-specific file recorded in audio_files dict (from YAML)
+        # 1. Recorded audio takes priority over TTS
+        rec_fname = point.audio_files_recorded.get(self.current_lang, '')
+        if rec_fname:
+            p = _make_path(rec_fname)
+            if os.path.exists(p):
+                log.debug(f'[RESOLVE] via audio_files_recorded[{self.current_lang}] → {p}')
+                return p
+            log.debug(f'[RESOLVE] recorded {rec_fname!r} not found at {p}')
+
+        # 2. TTS audio (audio_files dict from YAML)
         lang_fname = point.audio_files.get(self.current_lang, '')
         if lang_fname:
             p = _make_path(lang_fname)
@@ -246,7 +255,7 @@ class ARAudioNode(Node):
                 return p
             log.debug(f'[RESOLVE] audio_files[{self.current_lang}]={lang_fname!r} not found at {p}')
 
-        # 2. Constructed filename: {id}_{lang}.mp3
+        # 3. Constructed filename: {id}_{lang}.mp3
         if point.id and self.current_lang:
             candidate = f"{point.id}_{self.current_lang}.mp3"
             p = _make_path(candidate)
@@ -254,12 +263,6 @@ class ARAudioNode(Node):
                 log.debug(f'[RESOLVE] via constructed name → {p}')
                 return p
             log.debug(f'[RESOLVE] constructed {candidate!r} not found at {p}')
-
-        # 3. Fallback: default audio_file field
-        if point.audio_file:
-            p = _make_path(point.audio_file)
-            log.debug(f'[RESOLVE] fallback audio_file → {p}')
-            return p
 
         log.warn(
             f'[RESOLVE] No audio resolved for {point.name!r} '

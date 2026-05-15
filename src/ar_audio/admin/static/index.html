@@ -83,6 +83,8 @@ body{font:14px/1.5 -apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif;color:
 .ls-grid{display:flex;flex-direction:column;gap:4px}
 .ls-row{display:flex;align-items:center;gap:6px;padding:5px 8px;border-radius:5px;background:#f8fafc;border:1px solid var(--bd)}
 .ls-row.generated{border-color:#bbf7d0;background:#f0fdf4}
+.ls-row.recorded{border-color:#a5b4fc;background:#eef2ff}
+.ls-status.rec{color:#4338ca}
 .ls-lang{width:70px;font-size:11px;font-weight:600;color:var(--tx);flex-shrink:0}
 .ls-status{flex:1;font-size:11px}
 .ls-status.ok{color:#15803d}
@@ -519,16 +521,6 @@ function openForm(point, defLat, defLon) {
 
 function buildForm(p) {
   const jaText = (p.tts_texts || {}).ja || '';
-  const audioCard = p.audio_file
-    ? `<div class="audio-card">
-         <div class="audio-dot dot-ok"></div>
-         <span class="audio-name">${h(p.audio_file)}</span>
-         <button class="btn btn-ghost btn-xs" onclick="previewAudio('${h(p.audio_file)}')">▶ 試聴</button>
-       </div>`
-    : `<div class="audio-card">
-         <div class="audio-dot dot-none"></div>
-         <span class="audio-name none">音声ファイルなし</span>
-       </div>`;
 
   document.getElementById('form-body').innerHTML = `
     <div class="section">
@@ -570,16 +562,6 @@ function buildForm(p) {
         </button>
       </div>
       <div class="ls-grid" id="lang-status-grid"></div>
-    </div>
-
-    <div class="section">
-      <div class="section-title">現在の音声ファイル</div>
-      ${audioCard}
-      <div class="upload-row" style="margin-top:6px">
-        <label for="f-upload" class="btn btn-ghost btn-sm">📁 アップロード</label>
-        <input type="file" id="f-upload" accept="audio/*" onchange="uploadAudio(this)">
-        <span id="upload-status" style="font-size:11px;color:var(--mu)"></span>
-      </div>
     </div>`;
 
   buildLangStatusGrid(p);
@@ -588,23 +570,47 @@ function buildForm(p) {
 function buildLangStatusGrid(p) {
   if (!p) return;
   const st = langStatus[p.id] || {};
+  const recorded = p.audio_files_recorded || {};
   const hasJaText = !!(p.tts_texts?.ja || '').trim();
-  const hasId = !!p.id;
+  const canAct = hasJaText && !!p.id;
 
   const rows = LANGS.map(l => {
-    const exists = st[l.code] === true;
-    const fname = `${p.id}_${l.code}.mp3`;
-    const canAct = hasJaText && hasId;
+    const hasTts = st[l.code] === true;
+    const recFname = recorded[l.code] || '';
+    const hasRec = !!recFname;
+
+    let statusText, statusClass, rowClass;
+    if (hasRec) {
+      statusText = '📼 録音版'; statusClass = 'rec'; rowClass = 'recorded';
+    } else if (hasTts) {
+      statusText = '✅ TTS生成済み'; statusClass = 'ok'; rowClass = 'generated';
+    } else {
+      statusText = '⏳ 未生成'; statusClass = 'ng'; rowClass = '';
+    }
+
+    const previewFname = hasRec ? recFname : (hasTts ? `${p.id}_${l.code}.mp3` : '');
+    const previewBtn = previewFname
+      ? `<button class="btn btn-xs btn-ghost" onclick="previewAudio('${h(previewFname)}')" title="試聴">▶</button>`
+      : `<button class="btn btn-xs btn-ghost" disabled title="試聴">▶</button>`;
+
+    const deleteBtn = hasRec
+      ? `<button class="btn btn-xs btn-del" onclick="deleteRecordedAudio('${l.code}')" title="録音削除">🗑</button>`
+      : '';
+
     return `
-      <div class="ls-row${exists ? ' generated' : ''}">
+      <div class="ls-row${rowClass ? ' ' + rowClass : ''}">
         <span class="ls-lang">${h(l.name)}</span>
-        <span class="ls-status${exists ? ' ok' : ' ng'}">${exists ? '✅ 生成済み' : '⏳ 未生成'}</span>
+        <span class="ls-status ${statusClass}">${statusText}</span>
         <div class="ls-actions">
-          ${exists ? `<button class="btn btn-xs btn-ghost" onclick="previewAudio('${h(fname)}')" title="試聴">▶</button>` : ''}
+          ${previewBtn}
           <button class="btn btn-xs btn-ghost" id="btn-regen-${l.code}"
             onclick="regenerateAudio('${l.code}')"
-            ${canAct ? '' : 'disabled'}
-            title="${exists ? '再生成' : '生成'}">再生成</button>
+            ${canAct ? '' : 'disabled'} title="再生成">🔄</button>
+          <label class="btn btn-xs btn-ghost" title="録音版をアップロード" style="cursor:pointer">
+            ⬆<input type="file" style="display:none" accept="audio/*"
+              onchange="uploadAudioLang('${l.code}', this)">
+          </label>
+          ${deleteBtn}
         </div>
       </div>`;
   }).join('');
@@ -640,8 +646,8 @@ async function savePoint(silent = false) {
   try {
     const body = {
       name, latitude: lat, longitude: lon, radius, tts_texts,
-      audio_file: editing?.audio_file || null,
       audio_files: editing?.audio_files || {},
+      audio_files_recorded: editing?.audio_files_recorded || {},
     };
     let saved;
     if (editing?.id) {
@@ -812,30 +818,54 @@ function previewAudio(fname) {
   audio.onended = () => { if (_activeAudio === audio) _activeAudio = null; };
 }
 
-async function uploadAudio(input) {
+async function uploadAudioLang(lang, input) {
   if (!input.files.length) return;
   if (!editing?.id) {
     const saved = await savePoint(true);
     if (!saved) { input.value = ''; return; }
   }
-  const st = document.getElementById('upload-status');
-  if (st) st.textContent = 'アップロード中...';
+  const pid = editing.id;
   const fd = new FormData();
   fd.append('file', input.files[0]);
   try {
-    const r = await fetch(`/api/points/${editing.id}/upload`, {method: 'POST', body: fd});
+    const r = await fetch(
+      `/api/points/${pid}/upload/${encodeURIComponent(lang)}`,
+      {method: 'POST', body: fd}
+    );
     if (!r.ok) throw new Error((await r.json()).detail || r.statusText);
     const pr = await fetch('/api/points');
     points = await pr.json();
-    const updated = points.find(p => p.id === editing.id);
+    await refreshLangStatus();
+    const updated = points.find(p => p.id === pid);
     if (updated) { editing = updated; buildForm(updated); }
     renderList();
-    toast('アップロードしました', 'ok');
+    toast(`${lang} 録音版をアップロードしました`, 'ok');
   } catch(e) {
-    toast('Upload: ' + e.message, 'del');
+    toast('アップロードエラー: ' + e.message, 'del');
   } finally {
-    if (st) st.textContent = '';
     input.value = '';
+  }
+}
+
+async function deleteRecordedAudio(lang) {
+  if (!editing?.id) return;
+  if (!confirm(`${lang} の録音版を削除しますか？\nTTS版（あれば）に戻ります。`)) return;
+  const pid = editing.id;
+  try {
+    const r = await fetch(
+      `/api/points/${pid}/audio_recorded/${encodeURIComponent(lang)}`,
+      {method: 'DELETE'}
+    );
+    if (!r.ok) throw new Error((await r.json()).detail || r.statusText);
+    const pr = await fetch('/api/points');
+    points = await pr.json();
+    await refreshLangStatus();
+    const updated = points.find(p => p.id === pid);
+    if (updated) { editing = updated; buildForm(updated); }
+    renderList();
+    toast(`${lang} 録音版を削除しました`, 'ok');
+  } catch(e) {
+    toast('削除エラー: ' + e.message, 'del');
   }
 }
 
